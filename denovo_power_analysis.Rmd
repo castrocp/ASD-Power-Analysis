@@ -1,0 +1,136 @@
+---
+title: "DNM_power_analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+library(statmod)
+library(purrr)
+library(tidyr)
+library(pwr)
+```
+
+### Using Fisher's exact test for comparing proportions  
+  
+  
+####With proportion of DNMs in fetal brain promoters between proband (3107/134969) and sibling (3041/131896) groups, across various sample sizes.  
+
+```{r}
+# from statmod package
+#power.fisher.test(p1, p2, n1, n2, alpha=0.05, nsim=100, alternative="two.sided")
+# p1,p2, proportions to be compared
+# n1,n2, sample sizes
+# alpha, significance level
+# nsim, number of data sets to simulate
+
+# Assuming an average of 70 DNMs per family, roughly 133000 for 1900 families. 700000 for 10k families.
+# Increments of 70*500 families = 35000 mutations
+args_n <- list(n1 = seq(100000, 5000000, 100000), n2 = seq(100000, 5000000, 100000))
+
+dat = data.frame(sample_size = seq(100000, 5000000, 100000),
+                 power = unlist(pmap(args_n, power.fisher.test, p1 = 1806/134969, p2 = 1732/131896, nsim = 100, alternative = "greater")))
+
+ggplot(dat, aes(x=sample_size, y=power)) +
+       geom_smooth(method = "loess", se = FALSE) + 
+  annotate("point", x=266867, y=.23, color = "red", size = 3) +
+  geom_segment(aes(x=1000000, y=.20,xend=266890, yend=.23), arrow = arrow(length = unit(.25, "cm")) ) +
+  annotate("text", x=1000000, y =.20, label= "observed") +
+  geom_hline(yintercept =.80, linetype = "dashed") +
+  labs(x= "Total number of de novo mutations", y= "power")
+
+```
+  
+  
+####Fixed sample size (1917 families), and fixed proportion of variants of interest in siblings (~.023)
+### For mutations in fetal brain enhancers proband (3107/134969) and sibling (3041/131896)
+#### The proportion is a little larger in the siblings than in the probands, so 
+```{r fixed_sib_prop}
+# fix the siblings proportion and alter the proband proportion
+args_p1 <- list(p1 = seq(.015, .110, .005))
+
+dat = data.frame(proband_proportion = seq(.015, .110, .005),
+                 power = unlist(pmap(args_p1, power.fisher.test, n1 = 134969, n2 = 131896, p2 = 3041/131896, nsim = 300, alternative = "greater")))
+
+ggplot(dat, aes(x=proband_proportion, y=power)) +
+       geom_point() + geom_smooth(method = "loess", se = FALSE) +
+  geom_hline(yintercept =.80)
+```
+  
+So, for a power of at least .80, we can say we need a proportion of around .03 variants of interest in probands.  
+Thatd be around 4,050 DNMs.  
+Inputting that number into the proportions, power would be:
+```{r}
+power.fisher.test(n1 = 1917, n2 = 1917, p1 = 4050/134969, p2 = 3041/131896, nsim = 100)
+```
+  
+
+
+## dataframe with brain-specific TURF power calculations
+```{r calculate brain turf power}
+args_n <- list(n1 = seq(1, 5000000, 100000), n2 = seq(1, 5000000, 100000))
+
+brain_turf_df = data.frame(sample_size = seq(1, 5000000, 100000),
+                 brain_turf_top15_power = unlist(pmap(args_n, power.fisher.test, p1 = 20088/134969, p2 = 19768/131896, nsim = 50, alternative = "greater")),
+                 brain_turf_top10_power = unlist(pmap(args_n, power.fisher.test, p1 = 13471/134969, p2 = 13141/131896, nsim = 50, alternative = "greater")),
+                 brain_turf_top5_power = unlist(pmap(args_n, power.fisher.test, p1 = 6828/134969, p2 = 6540/131896, nsim = 50, alternative = "greater")),
+                 brain_turf_top1_power = unlist(pmap(args_n, power.fisher.test, p1 = 1353/134969, p2 = 1293/131896, nsim = 50, alternative = "greater")))
+
+
+```
+
+
+```{r reshape brain turf df}
+brain_turf_long_df <-
+  brain_turf_df %>%
+  pivot_longer(!sample_size, names_to = "annotation", values_to = "power")
+```
+
+```{r plot brain turf power}
+ggplot(brain_turf_long_df, aes(x=sample_size, y=power)) + 
+  geom_point(aes(color=annotation)) + 
+  geom_smooth(method = "loess", se = FALSE, aes(color=annotation)) +
+  geom_hline(yintercept = .8, linetype = "dashed")
+```
+ 
+```{r calculate generic turf}
+args_n <- list(n1 = seq(1, 5000000, 100000), n2 = seq(1, 5000000, 100000))
+
+generic_turf_df = data.frame(sample_size = seq(1, 5000000, 100000),
+                 generic_turf_top15_power = unlist(pmap(args_n, power.fisher.test, p1 = 20625/134969, p2 = 20091/131896, nsim = 50, alternative = "greater")),
+                 generic_turf_top10_power = unlist(pmap(args_n, power.fisher.test, p1 = 13672/134969, p2 = 13276/131896, nsim = 50, alternative = "greater")),
+                 generic_turf_top5_power = unlist(pmap(args_n, power.fisher.test, p1 = 7370/134969, p2 = 7146/131896, nsim = 50, alternative = "greater")),
+                 generic_turf_top1_power = unlist(pmap(args_n, power.fisher.test, p1 = 1353/134969, p2 = 1341/131896, nsim = 50, alternative = "greater")))
+
+```
+
+```{r reshape generic turf df}
+generic_turf_long_df <-
+  generic_turf_df %>%
+  pivot_longer(!sample_size, names_to = "annotation", values_to = "power")
+```
+
+```{r plot generic turf power}
+ggplot(generic_turf_long_df, aes(x=sample_size, y=power)) + 
+  geom_point(aes(color=annotation)) + 
+  geom_smooth(method = "loess", se = FALSE, aes(color=annotation)) +
+  geom_hline(yintercept = .8, linetype = "dashed")
+```
+
+```{r combine generic and brain turf dataframes}
+combined_turf_long_df <- rbind(generic_turf_long_df, brain_turf_long_df)
+```
+
+```{r plot generic and brain turf}
+ggplot(combined_turf_long_df, aes(x=sample_size, y=power)) + 
+  #geom_point(aes(color=annotation)) + 
+  geom_smooth(method = "loess", se = FALSE, aes(color=annotation), span = 1) +
+  geom_hline(yintercept = .8, linetype = "dashed")
+```
+#
+                
+                
+                regdb2s_power = unlist(pmap(args_n, power.fisher.test, p1 = 5446/134969, p2 = 5196/131896, nsim = 50, alternative = "greater"))), promoter_power = unlist(pmap(args_n, power.fisher.test, p1 = 1806/134969, p2 = 1732/131896, nsim = 50, alternative = "greater")),
+                
+                                 stop_gain_power = unlist(pmap(args_n, power.fisher.test, p1 = 120/134969, p2 = 62/131896, nsim = 50, alternative = "greater")),
+

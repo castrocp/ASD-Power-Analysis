@@ -8,15 +8,10 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE)
 library(statmod)
 library(purrr)
 library(tidyr)
-library(pwr)
 ```
 
-### Using Fisher's exact test for comparing proportions  
-  
-  
-####With proportion of DNMs in fetal brain promoters between proband (3107/134969) and sibling (3041/131896) groups, across various sample sizes.  
 
-```{r}
+```{r calculate fetal brain promoter power}
 # from statmod package
 #power.fisher.test(p1, p2, n1, n2, alpha=0.05, nsim=100, alternative="two.sided")
 # p1,p2, proportions to be compared
@@ -25,60 +20,68 @@ library(pwr)
 # nsim, number of data sets to simulate
 
 # Assuming an average of 70 DNMs per family, roughly 133000 for 1900 families. 700000 for 10k families.
-# Increments of 70*500 families = 35000 mutations
-args_n <- list(n1 = seq(100000, 5000000, 100000), n2 = seq(100000, 5000000, 100000))
+# Increments of 100000/70 mutations ~1500 families
+args_n <- list(n1 = seq(1, 5000000, 100000), n2 = seq(1, 5000000, 100000))
 
-dat = data.frame(sample_size = seq(100000, 5000000, 100000),
-                 power = unlist(pmap(args_n, power.fisher.test, p1 = 1806/134969, p2 = 1732/131896, nsim = 100, alternative = "greater")))
+promoter_df = data.frame(sample_size = seq(1, 5000000, 100000),
+                 fetalbrain_promoter_power = unlist(pmap(args_n, power.fisher.test, p1 = 1806/134969, p2 = 1732/131896, nsim = 75, alternative = "greater")))
+```
 
-ggplot(dat, aes(x=sample_size, y=power)) +
-       geom_smooth(method = "loess", se = FALSE) + 
-  annotate("point", x=266867, y=.23, color = "red", size = 3) +
-  geom_segment(aes(x=1000000, y=.20,xend=266890, yend=.23), arrow = arrow(length = unit(.25, "cm")) ) +
-  annotate("text", x=1000000, y =.20, label= "observed") +
-  geom_hline(yintercept =.80, linetype = "dashed") +
-  labs(x= "Total number of de novo mutations", y= "power")
+```{r reshape brain promoter df}
+brain_promoter_long_df <-
+  promoter_df %>%
+  pivot_longer(!sample_size, names_to = "annotation", values_to = "power")
 
 ```
-  
+
+```{r plot brain promoter power}
+ggplot(brain_promoter_long_df, aes(x=sample_size, y=power)) + 
+  geom_point(aes(color=annotation)) + 
+  geom_smooth(method = "loess", se = FALSE, aes(color=annotation)) +
+  geom_hline(yintercept = .8, linetype = "dashed")
+```
+
   
 ####Fixed sample size (1917 families), and fixed proportion of variants of interest in siblings (~.023)
 ### For mutations in fetal brain enhancers proband (3107/134969) and sibling (3041/131896)
-#### The proportion is a little larger in the siblings than in the probands, so 
-```{r fixed_sib_prop}
-# fix the siblings proportion and alter the proband proportion
+#### The observed proportion is a little larger in the siblings than in the probands, so power should be zero until the proband proportion is greater
+```{r calculate enhancer power with fixed sibling proportion}
 args_p1 <- list(p1 = seq(.015, .110, .005))
 
-dat = data.frame(proband_proportion = seq(.015, .110, .005),
-                 power = unlist(pmap(args_p1, power.fisher.test, n1 = 134969, n2 = 131896, p2 = 3041/131896, nsim = 300, alternative = "greater")))
+enhancer_df = data.frame(proband_proportion = seq(.015, .110, .005),
+                 power = unlist(pmap(args_p1, power.fisher.test, n1 = 134969, n2 = 131896, p2 = 3041/131896, nsim = 75, alternative = "greater")))
 
-ggplot(dat, aes(x=proband_proportion, y=power)) +
-       geom_point() + geom_smooth(method = "loess", se = FALSE) +
+```
+
+```{r plot enhancer power}
+ggplot(enhancer_df, aes(x=proband_proportion, y=power)) + 
+  geom_point() + 
+  geom_smooth(method = "loess", se = FALSE) +
   geom_hline(yintercept =.80)
 ```
-  
+
 So, for a power of at least .80, we can say we need a proportion of around .03 variants of interest in probands.  
 Thatd be around 4,050 DNMs.  
 Inputting that number into the proportions, power would be:
 ```{r}
-power.fisher.test(n1 = 1917, n2 = 1917, p1 = 4050/134969, p2 = 3041/131896, nsim = 100)
+#power.fisher.test(n1 = 1917, n2 = 1917, p1 = 4050/134969, p2 = 3041/131896, nsim = 75)
 ```
   
 
 
-## dataframe with brain-specific TURF power calculations
+###TURF power calculations
+
 ```{r calculate brain turf power}
 args_n <- list(n1 = seq(1, 5000000, 100000), n2 = seq(1, 5000000, 100000))
 
 brain_turf_df = data.frame(sample_size = seq(1, 5000000, 100000),
-                 brain_turf_top15_power = unlist(pmap(args_n, power.fisher.test, p1 = 20088/134969, p2 = 19768/131896, nsim = 50, alternative = "greater")),
-                 brain_turf_top10_power = unlist(pmap(args_n, power.fisher.test, p1 = 13471/134969, p2 = 13141/131896, nsim = 50, alternative = "greater")),
-                 brain_turf_top5_power = unlist(pmap(args_n, power.fisher.test, p1 = 6828/134969, p2 = 6540/131896, nsim = 50, alternative = "greater")),
-                 brain_turf_top1_power = unlist(pmap(args_n, power.fisher.test, p1 = 1353/134969, p2 = 1293/131896, nsim = 50, alternative = "greater")))
+                 brain_turf_top15_power = unlist(pmap(args_n, power.fisher.test, p1 = 20088/134969, p2 = 19768/131896, nsim = 75, alternative = "greater")),
+                 brain_turf_top10_power = unlist(pmap(args_n, power.fisher.test, p1 = 13471/134969, p2 = 13141/131896, nsim = 75, alternative = "greater")),
+                 brain_turf_top5_power = unlist(pmap(args_n, power.fisher.test, p1 = 6828/134969, p2 = 6540/131896, nsim = 75, alternative = "greater")),
+                 brain_turf_top1_power = unlist(pmap(args_n, power.fisher.test, p1 = 1353/134969, p2 = 1293/131896, nsim = 75, alternative = "greater")))
 
 
 ```
-
 
 ```{r reshape brain turf df}
 brain_turf_long_df <-
@@ -97,10 +100,10 @@ ggplot(brain_turf_long_df, aes(x=sample_size, y=power)) +
 args_n <- list(n1 = seq(1, 5000000, 100000), n2 = seq(1, 5000000, 100000))
 
 generic_turf_df = data.frame(sample_size = seq(1, 5000000, 100000),
-                 generic_turf_top15_power = unlist(pmap(args_n, power.fisher.test, p1 = 20625/134969, p2 = 20091/131896, nsim = 50, alternative = "greater")),
-                 generic_turf_top10_power = unlist(pmap(args_n, power.fisher.test, p1 = 13672/134969, p2 = 13276/131896, nsim = 50, alternative = "greater")),
-                 generic_turf_top5_power = unlist(pmap(args_n, power.fisher.test, p1 = 7370/134969, p2 = 7146/131896, nsim = 50, alternative = "greater")),
-                 generic_turf_top1_power = unlist(pmap(args_n, power.fisher.test, p1 = 1353/134969, p2 = 1341/131896, nsim = 50, alternative = "greater")))
+                 generic_turf_top15_power = unlist(pmap(args_n, power.fisher.test, p1 = 20625/134969, p2 = 20091/131896, nsim = 75, alternative = "greater")),
+                 generic_turf_top10_power = unlist(pmap(args_n, power.fisher.test, p1 = 13672/134969, p2 = 13276/131896, nsim = 75, alternative = "greater")),
+                 generic_turf_top5_power = unlist(pmap(args_n, power.fisher.test, p1 = 7370/134969, p2 = 7146/131896, nsim = 75, alternative = "greater")),
+                 generic_turf_top1_power = unlist(pmap(args_n, power.fisher.test, p1 = 1353/134969, p2 = 1341/131896, nsim = 75, alternative = "greater")))
 
 ```
 
@@ -123,14 +126,59 @@ combined_turf_long_df <- rbind(generic_turf_long_df, brain_turf_long_df)
 
 ```{r plot generic and brain turf}
 ggplot(combined_turf_long_df, aes(x=sample_size, y=power)) + 
-  #geom_point(aes(color=annotation)) + 
-  geom_smooth(method = "loess", se = FALSE, aes(color=annotation), span = 1) +
+  geom_point(aes(color=annotation)) + 
+  geom_smooth(method = "loess", se = FALSE, aes(color=annotation)) + #span = 1
   geom_hline(yintercept = .8, linetype = "dashed")
 ```
-#
-                
-                
-                regdb2s_power = unlist(pmap(args_n, power.fisher.test, p1 = 5446/134969, p2 = 5196/131896, nsim = 50, alternative = "greater"))), promoter_power = unlist(pmap(args_n, power.fisher.test, p1 = 1806/134969, p2 = 1732/131896, nsim = 50, alternative = "greater")),
-                
-                                 stop_gain_power = unlist(pmap(args_n, power.fisher.test, p1 = 120/134969, p2 = 62/131896, nsim = 50, alternative = "greater")),
 
+
+### RegulomeDB power
+
+```{r calculate regdb power}
+# Can't calculate regdb 3's because the sibling proportion is greater
+args_n <- list(n1 = seq(1, 5000000, 100000), n2 = seq(1, 5000000, 100000))
+
+regdb_df = data.frame(sample_size = seq(1, 5000000, 100000),
+                 regdb_all2s_power = unlist(pmap(args_n, power.fisher.test, p1 = 5446/134969, p2 = 5196/131896, nsim = 75, alternative = "greater")),
+                 regdb_2a_power = unlist(pmap(args_n, power.fisher.test, p1 = 524/134969, p2 = 493/131896, nsim = 75, alternative = "greater")),
+                 regdb_2b_power = unlist(pmap(args_n, power.fisher.test, p1 = 4473/134969, p2 = 4304/131896, nsim = 75, alternative = "greater")),
+                 regdb_2c_power = unlist(pmap(args_n, power.fisher.test, p1 = 449/134969, p2 = 399/131896, nsim = 75, alternative = "greater")))
+```
+
+```{r reshape regdb df}
+regdb_long_df <-
+  regdb_df %>%
+  pivot_longer(!sample_size, names_to = "annotation", values_to = "power")
+```
+
+```{r plot regdb power}
+ggplot(regdb_long_df, aes(x=sample_size, y=power)) + 
+  geom_point(aes(color=annotation)) + 
+  geom_smooth(method = "loess", se = FALSE, aes(color=annotation)) +
+  geom_hline(yintercept = .8, linetype = "dashed")
+```
+                
+
+### VEP power
+```{r calculate vep power}
+args_n <- list(n1 = seq(1, 5000000, 100000), n2 = seq(1, 5000000, 100000))
+
+vep_df = data.frame(sample_size = seq(1, 5000000, 100000),
+                 missense_power = unlist(pmap(args_n, power.fisher.test, p1 = 1572/134969, p2 = 1480/131896, nsim = 75, alternative = "greater")),
+                 regulatory_region_power = unlist(pmap(args_n, power.fisher.test, p1 = 2356/134969, p2 = 2185/131896, nsim = 75, alternative = "greater")),
+                 splice_region_power = unlist(pmap(args_n, power.fisher.test, p1 = 187/134969, p2 = 167/131896, nsim = 75, alternative = "greater")),
+                 stop_gain_power = unlist(pmap(args_n, power.fisher.test, p1 = 120/134969, p2 = 62/131896, nsim = 75, alternative = "greater")))
+```
+
+```{r reshape vep df}
+vep_long_df <-
+  vep_df %>%
+  pivot_longer(!sample_size, names_to = "annotation", values_to = "power")
+```
+
+```{r plot vep power}
+ggplot(vep_long_df, aes(x=sample_size, y=power)) + 
+  geom_point(aes(color=annotation)) + 
+  geom_smooth(method = "loess", se = FALSE, aes(color=annotation)) +
+  geom_hline(yintercept = .8, linetype = "dashed")
+```

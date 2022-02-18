@@ -8,6 +8,7 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE)
 library(statmod)
 library(purrr)
 library(tidyr)
+library(ggplot2)
 ```
 
 
@@ -31,14 +32,22 @@ promoter_df = data.frame(sample_size = seq(1, 5000000, 100000),
 brain_promoter_long_df <-
   promoter_df %>%
   pivot_longer(!sample_size, names_to = "annotation", values_to = "power")
-
 ```
 
 ```{r plot brain promoter power}
-ggplot(brain_promoter_long_df, aes(x=sample_size, y=power)) + 
-  geom_point(aes(color=annotation)) + 
-  geom_smooth(method = "loess", se = FALSE, aes(color=annotation)) +
-  geom_hline(yintercept = .8, linetype = "dashed")
+ggplot(brain_promoter_long_df, aes(x=sample_size/70, y=power)) + 
+  #geom_point(aes(color=annotation)) + 
+  geom_smooth(method = "loess", se = FALSE, aes(color=annotation), span = .9) +
+  geom_hline(yintercept = .8, linetype = "dashed") +
+  geom_vline(xintercept = 1917) + #number of observed proband mutations
+  geom_curve(aes(x = 20000, y = .15, xend = 2200, yend = .03),arrow = arrow(length = unit(0.03, "npc")), curvature = .1) +
+  annotate('text', x = 28000, y = .15, label = 'This Study' ) +
+  scale_x_continuous(name = "Number of Families") +
+  scale_y_continuous(name = "Power", breaks = c(0,.2,.4,.6,.8,1), limits = c(0,1)) +
+  theme_minimal(base_size = 12) +
+  theme(axis.title.x = element_text(margin = margin(t=12, r=0, b=0, l=0)), #space between axis labels and title
+        axis.title.y = element_text(margin = margin(t=0, r=10, b=0, l=0)))
+
 ```
 
   
@@ -91,8 +100,8 @@ brain_turf_long_df <-
 
 ```{r plot brain turf power}
 ggplot(brain_turf_long_df, aes(x=sample_size, y=power)) + 
-  geom_point(aes(color=annotation)) + 
-  geom_smooth(method = "loess", se = FALSE, aes(color=annotation)) +
+  #geom_point(aes(color=annotation)) + 
+  geom_smooth(method = "loess", se = FALSE, aes(color=annotation), span = .9) +
   geom_hline(yintercept = .8, linetype = "dashed")
 ```
  
@@ -116,7 +125,7 @@ generic_turf_long_df <-
 ```{r plot generic turf power}
 ggplot(generic_turf_long_df, aes(x=sample_size, y=power)) + 
   geom_point(aes(color=annotation)) + 
-  geom_smooth(method = "loess", se = FALSE, aes(color=annotation)) +
+  geom_smooth(method = "loess", se = FALSE, aes(color=annotation), span = .9) +
   geom_hline(yintercept = .8, linetype = "dashed")
 ```
 
@@ -126,9 +135,10 @@ combined_turf_long_df <- rbind(generic_turf_long_df, brain_turf_long_df)
 
 ```{r plot generic and brain turf}
 ggplot(combined_turf_long_df, aes(x=sample_size, y=power)) + 
-  geom_point(aes(color=annotation)) + 
-  geom_smooth(method = "loess", se = FALSE, aes(color=annotation)) + #span = 1
-  geom_hline(yintercept = .8, linetype = "dashed")
+  #geom_point(aes(color=annotation)) + 
+  geom_smooth(method = "loess", se = FALSE, aes(color=annotation), span = .9) +
+  geom_hline(yintercept = .8, linetype = "dashed") +
+  scale_color_manual(values=c("#69b3a2", "purple", "black"))
 ```
 
 
@@ -153,7 +163,7 @@ regdb_long_df <-
 
 ```{r plot regdb power}
 ggplot(regdb_long_df, aes(x=sample_size, y=power)) + 
-  geom_point(aes(color=annotation)) + 
+  #geom_point(aes(color=annotation)) + 
   geom_smooth(method = "loess", se = FALSE, aes(color=annotation)) +
   geom_hline(yintercept = .8, linetype = "dashed")
 ```
@@ -177,8 +187,16 @@ vep_long_df <-
 ```
 
 ```{r plot vep power}
-ggplot(vep_long_df, aes(x=sample_size, y=power)) + 
-  geom_point(aes(color=annotation)) + 
-  geom_smooth(method = "loess", se = FALSE, aes(color=annotation)) +
-  geom_hline(yintercept = .8, linetype = "dashed")
+ggplot(vep_long_df, aes(x=sample_size/70, y=power)) + 
+  #geom_point(aes(color=annotation)) + 
+  geom_smooth(method = "loess", se = FALSE, aes(color=annotation), span = .6) +
+  geom_hline(yintercept = .8, linetype = "dashed") +
+  geom_vline(xintercept = 1917) + #number of observed proband mutations
+  geom_curve(aes(x = 20000, y = .15, xend = 1917, yend = .05),arrow = arrow(length = unit(0.03, "npc")), curvature = .1) +
+  annotate('text', x = 28000, y = .15, label = 'This Study') +
+  scale_x_continuous(name = "Number of Families") +
+  scale_y_continuous(name = "Power", breaks = c(0,.2,.4,.6,.8,1), limits = c(0,1)) + #the fitted curve would go above 1 without setting this limit
+  theme_minimal(base_size = 12) +
+  theme(axis.title.x = element_text(margin = margin(t=12, r=0, b=0, l=0)), #space between axis labels and title
+        axis.title.y = element_text(margin = margin(t=0, r=10, b=0, l=0)))
 ```

@@ -200,7 +200,7 @@ vep_long_df <-
 ```{r plot vep power}
 ggplot(vep_long_df, aes(x=sample_size/70, y=power)) + 
   #geom_point(aes(color=annotation)) + 
-  geom_smooth(method = "loess", se = FALSE, aes(color=annotation), span = .6) +
+  geom_smooth(method = "loess", se = FALSE, aes(color=annotation), span = 1) +
   geom_hline(yintercept = .8, linetype = "dashed") +
   geom_vline(xintercept = 1917) + #number of observed proband mutations
   geom_curve(aes(x = 20000, y = .15, xend = 1917, yend = .05),arrow = arrow(length = unit(0.03, "npc")), curvature = .1) +
@@ -212,8 +212,22 @@ ggplot(vep_long_df, aes(x=sample_size/70, y=power)) +
         axis.title.y = element_text(margin = margin(t=0, r=10, b=0, l=0)))
 ```
 
+```{r calculate combination power}
+args_n <- list(n1 = seq(1, 5000000, 100000), n2 = seq(1, 5000000, 100000))
+
+combination_df = data.frame(sample_size = seq(1, 5000000, 100000),
+                  brain_turf_top5_promoter = unlist(pmap(args_n, power.fisher.test, p1 = 459/134969, p2 = 427/131896, nsim = 75, alternative = "greater")),
+                  brain_turftop5_promoter_phastconstop10 = unlist(pmap(args_n, power.fisher.test, p1 = 14/134969, p2 = 12/131896, nsim = 75, alternative = "greater")))
+```
+
+```{r reshape combination df}
+combination_long_df <-
+  combination_df %>%
+  pivot_longer(!sample_size, names_to = "annotation", values_to = "power")
+```
+
 ```{r combine all annotation dataframes}
-all_annots_long_df <- rbind(brain_promoter_long_df, combined_turf_long_df, regdb_long_df, vep_long_df)
+all_annots_long_df <- rbind(brain_promoter_long_df, combined_turf_long_df, regdb_long_df, vep_long_df, combination_long_df)
 ```
 
 ```{r plot combination of annotations}
@@ -234,4 +248,18 @@ ggplot(all_annots_long_df[all_annots_long_df$annotation %in% selected_annotation
 
 ```
 
+```{r plot increasingly filtered annotations}
+selected_annotations <- c("fetalbrain_promoter_power", 
+                          "brain_turf_top5_promoter",
+                          "brain_turftop5_promoter_phastconstop10")
+
+ggplot(all_annots_long_df[all_annots_long_df$annotation %in% selected_annotations,], 
+       aes(x=sample_size/70, y=power)) + 
+  #geom_point(aes(color=annotation)) + 
+  geom_smooth(method = "loess", se = FALSE, aes(color=annotation)) +
+  geom_hline(yintercept = .8, linetype = "dashed") +
+  geom_vline(xintercept = 1917) +  #number of observed proband mutations
+  scale_x_continuous(name = "Number of Families")
+
+```
 

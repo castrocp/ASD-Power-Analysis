@@ -1,0 +1,269 @@
+---
+title: "pwr package"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(pwr)
+library(tidyverse)
+library(here)
+```
+
+# The possible parameters are
+# h = effect size, or "d" when using cohen's d (difference between means divided by pooled S.dev.)
+# n = sample size
+# sig.level = significance level (Type I error probability; default is .05)
+# power = desired power (1 - beta/TypeII error prob.)
+# alternative = alternative hypothesis, "two.sided" is default
+
+# Leave out the parameter you wish to solve for. 
+
+```{r one-sample proportion test}
+# how many times should a coin be flipped to have .80 power of correctly 
+# rejecting null of .5 if a coin is loaded to land heads 75% of the time
+p.out <-
+  pwr.p.test(h = ES.h(p1 =.75, p2 = .5), #(ES.h(p1, p2)) for effect size calculation for proportions
+          sig.level = .05,
+          power = .80,
+          alternative = "greater") #says we think the alternative is greater than the null
+
+# Plot a power curve
+plot(p.out)
+
+```
+
+
+```{r use range of sample sizes}
+n <- seq(10,100,10)
+
+p.out <- # creates a list object
+  pwr.p.test(h = .5, # effect size
+             sig.level = .05,
+             n = n)
+data.frame(n, power = sprintf("%.2f%%", p.out$power * 100))
+
+# Extract specific quantities
+pwr.p.test(h = .5, n = n, sig.level = .05)$power
+
+plot(p.out)
+```
+
+```{r two-sample t test for means}
+# Is there a difference between what male and female students pay at a coffee shop
+# observe 30 male and 30 female students and calculate the mean purchase price for each gender.
+ 
+# How powerful does the experiment have to be to detect a "medium" effect in either
+# direction with a significance level of .05?
+
+# Use the built-in conventional cohen effect size function (small, medium, or large)
+cohen.ES(test = "t", size = "medium") # this corresponds to an effect size of .5
+
+pwr.t.test(n = 30, d = .5, sig.level = .05) # n is the number in EACH group, d is cohen's effect size
+
+# This tells us our power is .47
+# How many students should be observed for a test with 80% power?
+
+pwr.t.test(d = 0.5, power = 0.80, sig.level = 0.05)
+#  this shows that n should be 63
+```
+
+```{r paired t test}
+##### Example 
+# 40-yard dash time for 24 runners are measured before and after training
+# We want to see if they are faster after training
+# how powerful is a test to detect a difference of .08 seconds with .05 significance, if
+#     we assume standard deviation of the differences is .25 seconds
+
+# We need to calculate cohen's d when we have a specific effect amount.  
+# d = difference in means/ standard deviation
+
+pwr.t.test(n = 24, d = .08/.25,
+           type = "paired", alternative = "greater")
+# power is only .45 in this case
+
+# How many runners should be sampled for 80% power?
+pwr.t.test(d = 0.08 / 0.25, power = 0.8,
+           type = "paired", alternative = "greater")
+# n should be 62
+
+# If the standard deviation WITHIN pairs is estimated instead of for the difference in pairs:
+# we need to multiply the estimated standard deviaion by sqrt(2).  
+#So, if we estimate standard deviaion of each runner's 40 yard dash to be .10 seconds
+
+pwr.t.test(d = 0.08 / (0.1 * sqrt(2)), power = 0.8,
+           type = "paired", alternative = "greater")
+# sample size now needed to detect a difference of .08 seconds is 21```
+```
+
+```{r fetal brain promoter power}
+power.prop.test(p1=(1806/134969), p2=(1732/131896),
+                sig.level = .05,
+                n = 134969,
+                #power = .80,
+                alternative = "one.sided")
+```
+
+```{r proximity to tss promoter power}
+power.prop.test(p1=1517/134969, p2 = 1416/131896,
+                n = 134969,
+                sig.level = .05,
+                #power = .80,
+                alternative = "one.sided")
+
+```
+
+
+
+
+```{r 2 proportions, unequal n for fetal brain promoter}
+pwr.2p2n.test(h=ES.h(p1 = (1806/134969), p2 = (1732/131896)), 
+              sig.level = .05,
+              n1 = 134969, n2 = 131896, 
+              alternative = "greater")
+```
+```{r 2 proportion equal n for fetal brain promoter}
+pwr.2p.test(h=ES.h(p1 = (1806/134969), p2 = (1732/131896)),
+            sig.level = .05,
+            power = .80)
+
+# n =3303948 (mutations per child), about 47k quads
+```
+```{r 2 proportion equl n FB promoter, changing n}
+pwr.2p.test(h=ES.h(p1 = (1806/134969), p2 = (1732/131896)),
+            sig.level = .05,
+            n = c(2000*70, 20000*70, 40000*70, 60000*70)) #families times average mutations per child
+
+```
+
+
+
+
+```{r 2 proportion equl n FB promoter, changing n , save results to data frame}
+n <- seq(1, 5000000, 100000)  # Increments of 100000/70 mutations ~1500 families
+p.out <- pwr.2p.test(h=ES.h(p1 = (1806/134969), p2 = (1732/131896)),
+            sig.level = .05,
+            n = n)
+
+p.out.df <- data.frame(n, power=p.out$power) #extract power from results with $
+
+```
+
+
+```{r plot from pwr results dataframe}
+ggplot(p.out.df, aes(x=n/70, y=power)) + 
+  geom_point() +
+  geom_smooth(method = "loess", se = FALSE) + 
+  geom_hline(yintercept = .8, linetype = "dashed") +
+  geom_vline(xintercept = 1917, linetype = "dashed") +
+  scale_y_continuous(name = "Power", breaks = c(0,.2,.4,.6,.8,1), limits = c(0,1))
+
+```
+
+```{r 2 proportion equl n proximity to tss promoter, changing n , save results to data frame}
+n <- seq(1, 5000000, 50000)  # Increments of 100000/70 mutations ~1500 families
+p.out <- pwr.2p.test(h=ES.h(p1 = 1517/134969, p2 = 1416/131896),
+            sig.level = .05,
+            n = n)
+
+p.out.proxtoTSS.df <- data.frame(n, power=p.out$power) #extract power from results with $
+```
+
+```{r plot from proxtoTSS pwr results dataframe}
+ggplot(p.out.proxtoTSS.df, aes(x=n/70, y=power)) + 
+  #geom_point() +
+  geom_line(color = "blue") +
+  #geom_smooth(method = "loess", se = FALSE) + 
+  geom_hline(yintercept = .8, linetype = "dashed") +
+  geom_vline(xintercept = 1917, linetype = "dotted") +
+  scale_y_continuous(name = "Power", breaks = c(0,.2,.4,.6,.8,1), limits = c(0,1))
+
+```
+
+```{r TURF power}
+n <- seq(1, 4800000, 10000)  # Increments of 100000/70 mutations ~1500 families
+fbPromoter.out <- pwr.2p.test(h=ES.h(p1 = (1806/134969), p2 = (1732/131896)),
+            sig.level = .05,
+            n = n)
+
+genericTURF.out <- pwr.2p.test(h=ES.h(p1 = 7370/134969, p2 = 7146/131896),
+            sig.level = .05,
+            n = n)
+
+brainTURF.out <- pwr.2p.test(h=ES.h(p1 = 6828/134969, p2 = 6540/131896),
+            sig.level = .05,
+            n = n)
+
+#stopgain.out <- pwr.2p.test(h=ES.h(p1 = 120/134969, p2 = 62/131896),
+#            sig.level = .05,
+#            n = n)
+
+missense.out <- pwr.2p.test(h=ES.h(p1 = (1572/134969), p2 = (1480/131896)),
+            sig.level = .05,
+            n = n)
+
+coding_vep_highimpact.out <- pwr.2p.test(h=ES.h(p1 = (126/134969), p2 = (74/131896)),    #(604/134969), p2 = (467/131896)
+            sig.level = .05,
+            n = n)
+
+missense.out_df <- data.frame(n, missensepower=missense.out$power)
+
+#stopgain.out_df <- data.frame(n, stopgainpower=stopgain.out$power)
+
+fbPromoter.out_df <- data.frame(n, fbPromoterpower=fbPromoter.out$power)
+
+genericTURF.out_df <- data.frame(n, genericTURFpower=genericTURF.out$power)
+
+brainTURF.out_df <- data.frame(n, brainTURFpower=brainTURF.out$power)
+
+coding_vep_highimpact.out_df <- data.frame(n, codingpower=coding_vep_highimpact.out$power)
+
+
+mergedAnno.out_df <- join_all(list(genericTURF.out_df, brainTURF.out_df, fbPromoter.out_df, missense.out_df,  # stopgain.out_df, missense.out_df,
+                                   coding_vep_highimpact.out_df))
+
+mergedAnno_long_df <-
+  mergedAnno.out_df %>%
+  pivot_longer(!n, names_to = "annotation", values_to = "power")
+
+```
+
+
+```{r}
+ggplot(mergedAnno_long_df, aes(x=n/70, y=power, color = fct_reorder2(annotation, n, power))) + #order factors so lines match order in legent
+  #geom_point() +
+  geom_line(size = 1.3) +
+  #geom_smooth(method = "loess", se = FALSE, aes(color = annotation)) + 
+  #geom_hline(yintercept = .8, linetype = "dashed") +
+  geom_vline(xintercept = 1917, linetype = "dashed") +
+  geom_curve(aes(x = 14000, y = .15, xend = 2300, yend = .03),
+             arrow = arrow(length = unit(0.03, "npc")), color = "black", curvature = .1) +
+  annotate('text', x = 19000, y = .15, label = 'This Study') +
+  #geom_segment(
+    #x = 12000, y = .06,
+    #xend = 2300, yend = .02,
+    #lineend = "butt", # See available arrow types in example above
+    #linejoin = "round",
+    #size = .75, 
+    #arrow = arrow(length = unit(0.12, "inches"), type = "closed"),
+    #color = "black") +
+  scale_y_continuous(breaks = c(0,.2,.4,.6,.8,1), limits = c(0,1)) +
+  theme_minimal(base_size = 12) +
+  theme(axis.title.x = element_text(margin = margin(t=6, r=0, b=0, l=0)), #space between axis labels and title
+        axis.title.y = element_text(margin = margin(t=0, r=6, b=0, l=0)),
+        legend.position = c(0.80, 0.30),
+        legend.background = element_rect(fill = "white", color = "black"),
+        legend.key.size = unit(.5, 'cm')) + # change legend box size
+  scale_color_discrete(name = "Genomic Annotation", labels = c(#"stop-gain", 
+    "high-impact coding", "all missense","brain-tissue TURF top 5%", "fetal brain promoter", "generic TURF top 5%")) + # change legend label names
+  labs(
+    x = "Number of quads",
+    y = "Power")
+
+```
+```{r}
+ggsave(filename = here::here("figures", "annotation_power.png"), width = 1900, height = 1200, units = "px")
+```
+
+

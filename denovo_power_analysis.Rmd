@@ -8,7 +8,16 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE )
 library(statmod)
 library(purrr)
 library(tidyr)
+library(dplyr)
 library(ggplot2)
+library(viridis)
+library(wesanderson)
+library(here)
+```
+
+```{r Load data file}
+load(here("data","denovo_power_analysis.RData"))
+DNM_df <- read.delim(here("data", "DNMs.hg19.indelFilt.rptFilt.MAF001.singletons.RegDBv2.TURF.BrainSpecific.CADD.VEP.phastCons.SIFT.PolyPhen.DHS_fetal_brain_enh.DHS_fetal_brain_prom.1500bp_prom.autosomes.bed"))
 ```
 
 
@@ -50,6 +59,43 @@ ggplot(brain_promoter_long_df, aes(x=sample_size/70, y=power)) +
 
 ```
 
+```{r calculate upstream promoter power}
+#> nrow(DNM_df %>% filter(promoter_1500bp != "." & child == "proband" ))
+#[1] 1517
+#> nrow(DNM_df %>% filter(promoter_1500bp != "." & child == "sibling" ))
+#[1] 1416
+
+# Assuming an average of 70 DNMs per family, roughly 133000 for 1900 families. 700000 for 10k families.
+# Increments of 100000/70 mutations ~1500 families
+args_n <- list(n1 = seq(1, 5000000, 100000), n2 = seq(1, 5000000, 100000))
+
+upstream_promoter_df = data.frame(sample_size = seq(1, 5000000, 100000),
+                 upstream_promoter_power = unlist(pmap(args_n, power.fisher.test, p1 = 1517/134969, p2 = 1416/131896, nsim = 150, alternative = "greater")))
+```
+
+```{r reshape upstream promoter df}
+upstream_promoter_long_df <-
+  upstream_promoter_df %>%
+  pivot_longer(!sample_size, names_to = "annotation", values_to = "power")
+```
+
+```{r plot upstream promoter power}
+ggplot(upstream_promoter_long_df, aes(x=sample_size/70, y=power)) + 
+  #geom_point(aes(color=annotation)) + 
+  geom_smooth(method = "loess", se = FALSE, aes(color=annotation), span = .9) +
+  geom_hline(yintercept = .8, linetype = "dashed") +
+  geom_vline(xintercept = 1917) + #number of observed proband mutations
+  geom_curve(aes(x = 20000, y = .15, xend = 2200, yend = .03),arrow = arrow(length = unit(0.03, "npc")), curvature = .1) +
+  annotate('text', x = 28000, y = .15, label = 'This Study' ) +
+  scale_x_continuous(name = "Number of Families") +
+  scale_y_continuous(name = "Power", breaks = c(0,.2,.4,.6,.8,1), limits = c(0,1)) +
+  theme_minimal(base_size = 12) +
+  theme(axis.title.x = element_text(margin = margin(t=12, r=0, b=0, l=0)), #space between axis labels and title
+        axis.title.y = element_text(margin = margin(t=0, r=10, b=0, l=0)))
+
+```
+
+
 ####Fixed sample size (1917 families), and fixed proportion of variants of interest in siblings (~.023)
 ### For mutations in fetal brain enhancers proband (3107/134969) and sibling (3041/131896)
 #### The observed proportion is a little larger in the siblings than in the probands, so power should be zero until the proband proportion is greater
@@ -64,12 +110,14 @@ enhancer_df = data.frame(proband_proportion = seq(.015, .110, .005),
 ```{r plot enhancer power}
 ggplot(enhancer_df, aes(x=proband_proportion, y=power)) + 
   #geom_point() + 
-  geom_smooth(method = "loess", se = FALSE) +
+  geom_smooth(method = "loess", se = FALSE, span= 1) +
   geom_hline(yintercept =.80, linetype = "dashed") +
   geom_point(aes(x=.02302, y=.49), size = 3) + 
   annotate('text', x = .04, y = .27, label = 'This Study' ) +
   geom_segment(aes(x = .035, y =.3 , xend = .025, yend = .46),
-                  arrow = arrow(length = unit(0.5, "cm")))
+                  arrow = arrow(length = unit(0.5, "cm"))) + 
+  scale_y_continuous(name = "Power", breaks = c(0,.2,.4,.6,.8,1), limits = c(0,1)) +
+  scale_x_continuous(name = "Proportion of mutations in enhancers in probands")
   
 ```
 
@@ -104,7 +152,8 @@ brain_turf_long_df <-
 
 ```{r plot brain turf power}
 ggplot(brain_turf_long_df, aes(x=sample_size, y=power)) + 
-  #geom_point(aes(color=annotation)) + 
+  #geom_point(aes(color=annotation)) +
+  scale_color_viridis(discrete = TRUE, option = "D") +
   geom_smooth(method = "loess", se = FALSE, aes(color=annotation), span = .9) +
   geom_hline(yintercept = .8, linetype = "dashed")
 ```
@@ -209,8 +258,13 @@ ggplot(vep_long_df, aes(x=sample_size/70, y=power)) +
   scale_y_continuous(name = "Power", breaks = c(0,.2,.4,.6,.8,1), limits = c(0,1)) + #the fitted curve would go above 1 without setting this limit
   theme_minimal(base_size = 12) +
   theme(axis.title.x = element_text(margin = margin(t=12, r=0, b=0, l=0)), #space between axis labels and title
-        axis.title.y = element_text(margin = margin(t=0, r=10, b=0, l=0)))
+        axis.title.y = element_text(margin = margin(t=0, r=10, b=0, l=0))) 
+  #scale_color_manual(values= wes_palette("Darjeeling1", n = 4))
 ```
+```{r save vep plot}
+ggsave(here("Figures", "vep_power.png"), width = 2100, height = 1200, units = "px")
+```
+
 
 ```{r calculate combination power}
 args_n <- list(n1 = seq(1, 5000000, 100000), n2 = seq(1, 5000000, 100000))
@@ -233,19 +287,30 @@ all_annots_long_df <- rbind(brain_promoter_long_df, combined_turf_long_df, regdb
 ```{r plot combination of annotations}
 selected_annotations <- c("fetalbrain_promoter_power", 
                           "brain_turf_top5_power",
-                          "brain_turf_top1_power",  #generic top 1% has larger sib proportion
+                          #"brain_turf_top1_power",  #generic top 1% has larger sib proportion
                           "generic_turf_top5_power",
-                          "regdb_all2s_power",
-                          "stop_gain_power",
+                          #"regdb_all2s_power",
+                          #"stop_gain_power",
                           "regulatory_region_power")
 
 ggplot(all_annots_long_df[all_annots_long_df$annotation %in% selected_annotations,], 
        aes(x=sample_size/70, y=power)) + 
   #geom_point(aes(color=annotation)) + 
-  geom_smooth(method = "loess", se = FALSE, aes(color=annotation)) +
+  geom_smooth(method = "loess", se = FALSE, aes(color=annotation), span = .95) +
   geom_hline(yintercept = .8, linetype = "dashed") +
-  geom_vline(xintercept = 1917)  #number of observed proband mutations
+  geom_vline(xintercept = 1917) +  #number of observed proband mutations
+  geom_curve(aes(x = 20000, y = .15, xend = 2000, yend = .05),arrow = arrow(length = unit(0.03, "npc")), curvature = .1) +
+  scale_x_continuous(name = "Number of Families") +
+  scale_y_continuous(name = "Power", breaks = c(0,.2,.4,.6,.8,1), limits = c(0,1)) +
+  theme_minimal(base_size = 12) +
+  theme(axis.title.x = element_text(margin = margin(t=12, r=0, b=0, l=0)), #space between axis labels and title
+        axis.title.y = element_text(margin = margin(t=0, r=10, b=0, l=0))) +
+  annotate('text', x = 28000, y = .15, label = 'This Study')
+  
 
+```
+```{r save combination plot}
+ggsave(here("Figures", "combined_functionalAnno_power.png"), width = 2100, height = 1200, units = "px")
 ```
 
 ```{r plot increasingly filtered annotations}
@@ -256,10 +321,19 @@ selected_annotations <- c("fetalbrain_promoter_power",
 ggplot(all_annots_long_df[all_annots_long_df$annotation %in% selected_annotations,], 
        aes(x=sample_size/70, y=power)) + 
   #geom_point(aes(color=annotation)) + 
-  geom_smooth(method = "loess", se = FALSE, aes(color=annotation)) +
+  geom_smooth(method = "loess", se = FALSE, aes(color=annotation), span = .8) +
   geom_hline(yintercept = .8, linetype = "dashed") +
   geom_vline(xintercept = 1917) +  #number of observed proband mutations
-  scale_x_continuous(name = "Number of Families")
+  geom_curve(aes(x = 20000, y = .15, xend = 2000, yend = .015),arrow = arrow(length = unit(0.03, "npc")), curvature = .1) +
+  scale_x_continuous(name = "Number of Families") +
+  scale_y_continuous(name = "Power", breaks = c(0,.2,.4,.6,.8,1), limits = c(0,1)) +
+  theme_minimal(base_size = 12) +
+  theme(axis.title.x = element_text(margin = margin(t=12, r=0, b=0, l=0)), #space between axis labels and title
+        axis.title.y = element_text(margin = margin(t=0, r=10, b=0, l=0))) +
+  annotate('text', x = 28000, y = .15, label = 'This Study')
 
+```
+```{r save incremental annotation plot}
+ggsave(here("Figures", "incremental_annotation_power.png"), width = 2100, height = 1200, units = "px")
 ```
 
